@@ -1,11 +1,12 @@
-name: Pipeline DevSecOps (Ate Etapa 5)
+name: Pipeline DevSecOps Completo (CI/CD + Monitoramento)
 
 on:
   push:
     branches: [ "master", "main" ]
 
 jobs:
-  sast_dast_build:
+  sast_and_build:
+    name: 🚀 Fase CI - SAST & Build Docker (Etapas 3 e 4)
     runs-on: ubuntu-latest
     steps:
       - name: 1. Checkout do Codigo
@@ -21,13 +22,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install bandit safety
 
-      - name: 4. Etapa 4 - SAST (Analise Estatica com Bandit)
+      - name: 4. SAST - Analise Estatica com Bandit
         run: bandit -r todo_project/ -f screen || true
 
-      - name: 5. Etapa 4 - Analise de Dependencias (com Safety)
+      - name: 5. Analise de Dependencias com Safety
         run: safety check -r requirements.txt --full-report || true
 
-      - name: 6. Etapa 3 - Build da Imagem Docker
+      - name: 6. Build da Imagem Docker
         run: |
           echo 'FROM python:3.8-slim' > Dockerfile
           echo 'WORKDIR /app' >> Dockerfile
@@ -36,13 +37,69 @@ jobs:
           echo 'CMD ["python3", "-m", "http.server", "5000"]' >> Dockerfile
           docker build -t task-manager-app:latest .
 
-      - name: 7. Etapa 5 - DAST (Ataque com OWASP ZAP via IP)
+  review_environment:
+    name: 🔍 Fase CD - Review Environment (Etapa 6)
+    needs: sast_and_build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Criar Ambiente Temporario de Revisao
         run: |
-          # 1. Subir o contentor da nossa aplicacao
-          docker run -d --name app_teste -p 5000:5000 task-manager-app:latest
+          echo "Simulando: Recebendo solicitacao de Merge Request..."
+          echo "Criando automaticamente infraestrutura temporaria isolada para avaliacao manual..."
+          echo "Ambiente Review instanciado com sucesso."
+
+  deploy_stage_and_dast:
+    name: 🌐 Fase CD - Deploy em Stage & DAST Pos-Deploy (Etapa 6)
+    needs: review_environment
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Implantar em Ambiente de Stage (Simular Producao)
+        run: |
+          echo "Iniciando implantacao no ambiente de homologacao/stage..."
+          docker run -d --name app_stage -p 5000:5000 task-manager-app:latest
           sleep 5
-          # 2. Descobrir o IP interno do contentor
-          APP_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' app_teste)
-          echo "Atacar o IP interno: $APP_IP"
-          # 3. Mandar o ZAP atacar diretamente o IP descoberto
-          docker run ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://$APP_IP:5000 -I || true
+          echo "Deploy realizado com sucesso! Ambiente de Stage online."
+
+      - name: 2. Reexecucao do DAST em Stage (Ataque com OWASP ZAP)
+        run: |
+          STAGE_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' app_stage)
+          echo "IP do Ambiente de Stage detectado: $STAGE_IP"
+          echo "Iniciando testes dinamicos de seguranca pos-deploy via OWASP ZAP..."
+          docker run ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://$STAGE_IP:5000 -I || true
+
+  feedback_and_monitoring:
+    name: 🚨 Etapa 7 - Feedback e Monitoramento Pos-Implantacao
+    needs: deploy_stage_and_dast
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Configurar Agente de Monitoramento (Wazuh/ELK)
+        run: |
+          echo "Instalando e configurando agentes de monitoramento no ambiente de producao..."
+          echo "Conectando ao SIEM Centralizado (Simulacao Wazuh/ELK Stack)..."
+          echo "Monitoramento de integridade de arquivos e logs ativado."
+
+      - name: 2. Simular Ataque de Forca Bruta e Verificacao de Alerta
+        run: |
+          echo "--- SIMULANDO GERACAO DE LOGS DA APLICACAO ---"
+          # Criando logs falsos que simulam um ataque real acontecendo no servidor
+          echo "[2026-06-13 23:58:01] INFO: User anonymous attempted login on /login" > app.log
+          echo "[2026-06-13 23:58:02] WARNING: Failed login attempt for user 'admin' - IP: 192.168.10.45" >> app.log
+          echo "[2026-06-13 23:58:03] WARNING: Failed login attempt for user 'admin' - IP: 192.168.10.45" >> app.log
+          echo "[2026-06-13 23:58:04] WARNING: Failed login attempt for user 'admin' - IP: 192.168.10.45" >> app.log
+          echo "[2026-06-13 23:58:05] WARNING: Failed login attempt for user 'admin' - IP: 192.168.10.45" >> app.log
+          
+          echo "--- ANALISADOR DE ANOMALIAS SIEM (WAZUH) EM ACAO ---"
+          # Script que analisa o log em busca de multiplas falhas de login seguidas
+          ERRORS=$(grep -c "Failed login attempt" app.log)
+          echo "Numero de falhas de autenticacao detectadas nas últimas janelas de tempo: $ERRORS"
+          
+          if [ $ERRORS -ge 3 ]; then
+            echo "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
+            echo "🚨 [CRITICAL ALERT] SIEM/WAZUH DETECTED ANOMALY ON PRODUCTION SERVER!"
+            echo "🚨 TIPO DE EVENTO: Tentativa de quebra de senha por Forca Bruta (Brute Force)"
+            echo "🚨 ALVO: Usuario 'admin' | ORIGEM: IP 192.168.10.45"
+            echo "🚨 ACAO AUTOMATICA: IP de origem bloqueado temporariamente no Firewall (IPTables)."
+            echo "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
+          else
+            echo "Logs normais. Nenhuma anomalia detectada."
+          fi
