@@ -1,14 +1,14 @@
-name: Pipeline DevSecOps (Etapas 3 e 4)
+name: Pipeline DevSecOps (Ate Etapa 5)
 
 on:
   push:
     branches: [ "master", "main" ]
 
 jobs:
-  sast_and_build:
+  sast_dast_build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout do Código
+      - name: 1. Checkout do Codigo
         uses: actions/checkout@v3
 
       - name: 2. Configurar Python
@@ -27,7 +27,7 @@ jobs:
       - name: 5. Etapa 4 - Analise de Dependencias (com Safety)
         run: safety check -r requirements.txt --full-report || true
 
-      - name: 6. Etapa 3 - Build da Imagem Docker (Tolerante a Legado)
+      - name: 6. Etapa 3 - Build da Imagem Docker
         run: |
           echo 'FROM python:3.8-slim' > Dockerfile
           echo 'WORKDIR /app' >> Dockerfile
@@ -36,3 +36,11 @@ jobs:
           echo 'EXPOSE 5000' >> Dockerfile
           echo 'CMD ["python3", "todo_project/run.py"]' >> Dockerfile
           docker build -t task-manager-app:latest .
+
+      - name: 7. Etapa 5 - Subir a Aplicacao para o DAST
+        run: |
+          docker run -d -p 5000:5000 --name app_teste task-manager-app:latest
+          sleep 10
+
+      - name: 8. Etapa 5 - DAST (Ataque com OWASP ZAP)
+        run: docker run --network="host" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5000 -I || true
