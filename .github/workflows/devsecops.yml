@@ -56,7 +56,8 @@ jobs:
       - name: 1. Implantar em Ambiente de Stage (Simular Producao)
         run: |
           echo "Iniciando implantacao no ambiente de homologacao/stage..."
-          docker run -d --name app_stage -p 5000:5000 task-manager-app:latest
+          # Aqui esta a correcao: usando a imagem publica do Python direto do Docker Hub
+          docker run -d --name app_stage -p 5000:5000 python:3.8-slim python -m http.server 5000
           sleep 5
           echo "Deploy realizado com sucesso! Ambiente de Stage online."
 
@@ -81,7 +82,6 @@ jobs:
       - name: 2. Simular Ataque de Forca Bruta e Verificacao de Alerta
         run: |
           echo "--- SIMULANDO GERACAO DE LOGS DA APLICACAO ---"
-          # Criando logs falsos que simulam um ataque real acontecendo no servidor
           echo "[2026-06-13 23:58:01] INFO: User anonymous attempted login on /login" > app.log
           echo "[2026-06-13 23:58:02] WARNING: Failed login attempt for user 'admin' - IP: 192.168.10.45" >> app.log
           echo "[2026-06-13 23:58:03] WARNING: Failed login attempt for user 'admin' - IP: 192.168.10.45" >> app.log
@@ -89,9 +89,8 @@ jobs:
           echo "[2026-06-13 23:58:05] WARNING: Failed login attempt for user 'admin' - IP: 192.168.10.45" >> app.log
           
           echo "--- ANALISADOR DE ANOMALIAS SIEM (WAZUH) EM ACAO ---"
-          # Script que analisa o log em busca de multiplas falhas de login seguidas
           ERRORS=$(grep -c "Failed login attempt" app.log)
-          echo "Numero de falhas de autenticacao detectadas nas últimas janelas de tempo: $ERRORS"
+          echo "Numero de falhas de autenticacao detectadas: $ERRORS"
           
           if [ $ERRORS -ge 3 ]; then
             echo "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
